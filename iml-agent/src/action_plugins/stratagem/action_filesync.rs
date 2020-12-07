@@ -31,10 +31,8 @@ fn do_rsync<'a>(
 ) -> impl Future<Output = Result<Vec<FidError>, ImlAgentError>> + 'a {
     stream::iter(work_list)
         .map(move |work| async move {
-	    let src_file = format!("{}/{}", src_root.display(),
-				   work.file_path.display());
-	    let dest_file = format!("{}/{}", dest_root.display(),
-				    work.file_path.display());
+            let src_file = format!("{}/{}", src_root.display(), work.file_path.display());
+            let dest_file = format!("{}/{}", dest_root.display(), work.file_path.display());
             let output = Command::new("rsync")
                 .arg("-a")
                 .arg("-t")
@@ -49,7 +47,7 @@ fn do_rsync<'a>(
                 dest_file,
                 output.status.code()
             );
-		
+
             Ok::<_, ImlAgentError>(FidError {
                 fid: work.fid.fid.clone(),
                 data: work.fid.data.clone(),
@@ -75,25 +73,23 @@ fn do_dsync<'a>(
 ) -> impl Future<Output = Result<Vec<FidError>, ImlAgentError>> + 'a {
     stream::iter(work_list)
         .map(move |work| async move {
-	    let mpi_path = format!("{}/mpirun", env::get_openmpi_path());
-	    let mpi_count = env::get_openmpi_count();
-	    let src_file = format!("{}/{}", src_root.display(),
-				   work.file_path.display());
-	    let dest_file = format!("{}/{}", dest_root.display(),
-				    work.file_path.display());
-	    
-	    let output = Command::new(mpi_path)
-		.arg("--allow-run-as-root")
-		.arg("-c")
-		.arg(format!("{}", mpi_count))
-		.arg("--hostfile")
-		.arg("/etc/iml/filesync-hostfile")
-		.arg("dsync")
-		.arg("-S")
-		.arg(&src_file)
-		.arg(&dest_file)
-		.output()
-		.await?;
+            let mpi_path = format!("{}/mpirun", env::get_openmpi_path());
+            let mpi_count = env::get_openmpi_count();
+            let src_file = format!("{}/{}", src_root.display(), work.file_path.display());
+            let dest_file = format!("{}/{}", dest_root.display(), work.file_path.display());
+
+            let output = Command::new(mpi_path)
+                .arg("--allow-run-as-root")
+                .arg("-c")
+                .arg(format!("{}", mpi_count))
+                .arg("--hostfile")
+                .arg("/etc/iml/filesync-hostfile")
+                .arg("dsync")
+                .arg("-S")
+                .arg(&src_file)
+                .arg(&dest_file)
+                .output()
+                .await?;
 
             tracing::error!(
                 " moved {} to {} {:?}",
@@ -135,16 +131,16 @@ pub async fn process_fids(
     let mut dsync_list: Vec<Work> = vec![];
     let mut result = vec![];
 
-    let src_root : PathBuf;
-    let dest_root : PathBuf;
+    let src_root: PathBuf;
+    let dest_root: PathBuf;
     if task_args.action == ActionType::Push {
-	src_root = llapi.mntpt().into();
-	dest_root = task_args.remote.into();
+        src_root = llapi.mntpt().into();
+        dest_root = task_args.remote.into();
     } else {
-	src_root = task_args.remote.into();
-	dest_root  = llapi.mntpt().into();
+        src_root = task_args.remote.into();
+        dest_root = llapi.mntpt().into();
     }
-    
+
     for fid in fid_list {
         let fid_path = match llapi.fid2path(&fid.fid) {
             Ok(x) => x,
@@ -153,17 +149,17 @@ pub async fn process_fids(
                 continue;
             }
         };
-	let src_file = format!("{}/{}", &src_root.display(),
-			       fid_path);
-	let md = fs::metadata(&src_file).await?;
-	let work = Work { file_path: fid_path.into(),
-			  fid,
-	};
-	if md.is_dir() || (md.len() > LARGEFILE) {
-	    dsync_list.push(work);
-	} else {
-	    rsync_list.push(work);
-	}
+        let src_file = format!("{}/{}", &src_root.display(), fid_path);
+        let md = fs::metadata(&src_file).await?;
+        let work = Work {
+            file_path: fid_path.into(),
+            fid,
+        };
+        if md.is_dir() || (md.len() > LARGEFILE) {
+            dsync_list.push(work);
+        } else {
+            rsync_list.push(work);
+        }
     }
     let mut res = do_rsync(&src_root, &dest_root, &rsync_list).await?;
     result.append(&mut res);
@@ -171,7 +167,7 @@ pub async fn process_fids(
     res = do_dsync(&src_root, &dest_root, &dsync_list).await?;
     result.append(&mut res);
     res.clear();
-    
+
     Ok(result)
 }
 
@@ -183,31 +179,35 @@ pub async fn process_files(
     let mut dsync_list: Vec<Work> = vec![];
     let mut result = vec![];
 
-    let src_root : PathBuf;
-    let dest_root : PathBuf;
+    let src_root: PathBuf;
+    let dest_root: PathBuf;
     if task_args.action == ActionType::Push {
-	src_root = llapi.mntpt().into();
-	dest_root = task_args.remote.into();
+        src_root = llapi.mntpt().into();
+        dest_root = task_args.remote.into();
     } else {
-	src_root = task_args.remote.into();
-	dest_root  = llapi.mntpt().into();
+        src_root = task_args.remote.into();
+        dest_root = llapi.mntpt().into();
     }
-    
+
     for file_path in file_list {
         let fidstr = match llapi.path2fid(&file_path) {
             Ok(x) => x,
             Err(_) => "[0x0:0x0:0x0]".to_string(),
         };
-	let md = fs::metadata(&file_path).await?;
-	file_path.strip_prefix(llapi.mntpt()).unwrap();
-	let work = Work { file_path,
-			fid: FidItem { fid: fidstr.clone(), data: fidstr.into(), },
-	};
-	if md.is_dir() || (md.len() > LARGEFILE) {
-	    dsync_list.push(work);
-	} else {
-	    rsync_list.push(work);
-	}
+        let md = fs::metadata(&file_path).await?;
+        file_path.strip_prefix(llapi.mntpt()).unwrap();
+        let work = Work {
+            file_path,
+            fid: FidItem {
+                fid: fidstr.clone(),
+                data: fidstr.into(),
+            },
+        };
+        if md.is_dir() || (md.len() > LARGEFILE) {
+            dsync_list.push(work);
+        } else {
+            rsync_list.push(work);
+        }
     }
     let mut res = do_rsync(&src_root, &dest_root, &rsync_list).await?;
     result.append(&mut res);
@@ -215,6 +215,6 @@ pub async fn process_files(
     res = do_dsync(&src_root, &dest_root, &dsync_list).await?;
     result.append(&mut res);
     res.clear();
-    
+
     Ok(result)
 }
