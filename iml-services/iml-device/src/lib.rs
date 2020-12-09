@@ -459,14 +459,16 @@ pub fn find_targets<'a>(
         .fold(HashMap::new(), |mut acc: HashMap<String, Target>, x| {
             // We may have multiple incoming mounts for the same uuid.
             // This could happen when a target moves quickly but not all agents have reported new
-            // data yet. Handle this case by indexing by uuid and only overwritting
+            // data yet. Handle this case by indexing by name:uuid and only overwritting
             // if the current target has no associated filesystems.
-            match acc.get(&x.uuid) {
+
+            let key = format!("{}:{}", x.name, x.uuid);
+            match acc.get(&key) {
                 Some(y) if y.filesystems.is_empty() => {
-                    acc.insert(x.uuid.to_string(), x);
+                    acc.insert(key, x);
                 }
                 None => {
-                    acc.insert(x.uuid.to_string(), x);
+                    acc.insert(key, x);
                 }
                 Some(y) => {
                     tracing::info!("Skipping insert for {:?}, because we have {:?}", x, y);
