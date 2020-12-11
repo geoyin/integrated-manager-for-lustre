@@ -14,8 +14,7 @@ use crate::{
     network_interfaces::{get_interfaces, get_lnet_data},
 };
 use futures::Future;
-use iml_cmd::Command;
-use iml_wire_types::{LNetState, NetworkData};
+use iml_wire_types::NetworkData;
 use std::pin::Pin;
 
 
@@ -25,29 +24,6 @@ pub struct Network;
 
 pub fn create() -> impl DaemonPlugin {
     Network
-}
-
-async fn get_lnet_status() -> Result<LNetState, ImlAgentError> {
-    let loaded: bool = Command::new("udevadm")
-        .args(&["info", "--path", "/sys/module/lnet"])
-        .status()
-        .await?
-        .status();
-
-    if !loaded {
-        Ok(LNetState::Unloaded)
-    } else {
-        let up = Command::new("lnetctl")
-            .args(&["net", "show"])
-            .status()
-            .await?
-            .status();
-
-        match up {
-            true => Ok(LNetState::Up),
-            false => Ok(LNetState::Down),
-        }
-    }
 }
 
 async fn get_network_interfaces() -> Result<Output, ImlAgentError> {
